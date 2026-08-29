@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>משחק רוורס-דיבור</title>
+<style>
+  :root{
+    --bg:#12141a;
+    --panel:#1b1f28;
+    --line:#2a2f3a;
+    --amber:#e0a458;
+    --teal:#5ec8b8;
+    --red:#e0645c;
+    --violet:#9b8cf2;
+    --text:#f0eee6;
+    --muted:#8a8f9c;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;height:100%;}
+  body{
+    background:radial-gradient(circle at 50% 0%, #1a1e27, var(--bg) 70%);
+    color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    min-height:100vh;
+    display:flex;
+    justify-content:center;
+    padding:28px 20px 40px;
+  }
+  .app{width:100%;max-width:340px;display:flex;flex-direction:column;align-items:center;}
+  h1{font-size:1.35rem;font-weight:800;letter-spacing:.02em;margin:0 0 8px;text-align:center;}
+  h2{font-size:1.1rem;font-weight:700;margin:0 0 6px;text-align:center;}
+  .sub,.hint{color:var(--muted);font-size:.85rem;text-align:center;margin:0 0 20px;line-height:1.5;}
+  .screen{display:none;width:100%;flex-direction:column;align-items:center;}
+  .screen.active{display:flex;}
+  canvas{width:100%;height:100px;background:var(--panel);border:1px solid var(--line);border-radius:16px;margin-bottom:16px;}
+  .status{font-size:.9rem;color:var(--teal);min-height:1.3em;margin-bottom:18px;letter-spacing:.02em;}
+  .status.rec{color:var(--red);}
+  .buttons{display:flex;flex-direction:column;gap:14px;width:100%;}
+  button{all:unset;display:flex;align-items:center;justify-content:center;gap:10px;padding:15px;border-radius:14px;font-size:.98rem;font-weight:700;text-align:center;cursor:pointer;border:1px solid var(--line);transition:transform .12s ease, opacity .12s ease;}
+  button:active{transform:scale(.97);}
+  button:disabled{opacity:.35;cursor:default;}
+  button.rec{background:var(--red);color:#1a1210;}
+  button.rec.recording{background:#3a1b1b;color:var(--red);border-color:var(--red);animation:pulse 1.2s infinite;}
+  button.teal{background:var(--teal);color:#0f2320;}
+  button.amber{background:var(--amber);color:#241605;}
+  button.violet,button.primary{background:var(--violet);color:#1a1030;}
+  button.small{padding:10px;font-size:.82rem;margin-bottom:6px;}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(224,100,92,.5);}70%{box-shadow:0 0 0 10px rgba(224,100,92,0);}100%{box-shadow:0 0 0 0 rgba(224,100,92,0);}}
+  .dot{width:9px;height:9px;border-radius:50%;background:currentColor;flex-shrink:0;}
+
+  .addPlayerRow{display:flex;gap:8px;width:100%;margin-bottom:14px;}
+  .addPlayerRow input{flex:1;padding:12px;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--text);font-size:1rem;min-width:0;}
+  .addPlayerRow button{background:var(--violet);color:#1a1030;padding:12px 16px;border-radius:10px;font-weight:700;}
+
+  .playersList{list-style:none;padding:0;margin:0 0 18px;width:100%;display:flex;flex-direction:column;gap:8px;}
+  .playersList li{display:flex;justify-content:space-between;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 14px;}
+  .playersList li .removeBtn{all:unset;color:var(--red);cursor:pointer;font-weight:800;padding:2px 8px;}
+
+  .scoreResult{display:none;flex-direction:column;align-items:center;gap:8px;margin-top:6px;width:100%;}
+  .scoreResult.show{display:flex;}
+  .scoreBig{font-size:3rem;font-weight:800;color:var(--violet);}
+  .scoreBreakdown{display:flex;flex-direction:column;gap:2px;color:var(--muted);font-size:.85rem;text-align:center;margin-bottom:12px;}
+
+  .leaderboard{list-style:none;padding:0;margin:8px 0 22px;width:100%;display:flex;flex-direction:column;gap:10px;}
+  .leaderboard li{display:flex;align-items:center;gap:12px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;}
+  .leaderboard li.winner{border-color:var(--amber);box-shadow:0 0 0 1px var(--amber) inset;}
+  .leaderboard .rank{width:32px;font-weight:700;color:var(--muted);text-align:center;}
+  .leaderboard li.winner .rank{color:var(--amber);font-size:1.15rem;}
+  .leaderboard .name{flex:1;font-weight:600;}
+  .leaderboard .score{font-weight:800;font-size:1.05rem;color:var(--teal);}
+  .disclaimer{color:var(--muted);font-size:.72rem;text-align:center;margin:-8px 0 20px;line-height:1.5;}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div id="screen-start" class="screen active">
+    <h1>🔁 משחק רוורס-דיבור</h1>
+    <p class="sub">הקליטו מילה או משפט, שמעו אותו הפוך, ונסו לבטא בקול את מה ששמעתם — כדי לחזור למקור. מי שהכי קרוב מנצח.</p>
+    <div class="buttons">
+      <button id="btnNewGame" class="primary">משחק חדש</button>
+    </div>
+  </div>
+
+  <div id="screen-original" class="screen">
+    <h2>שלב 1 · המילה המקורית</h2>
+    <p class="hint">הקליטו את המילה או המשפט שכולם ינסו להפוך</p>
+    <canvas id="waveOriginal"></canvas>
+    <div class="status" id="statusOriginal">מוכן להקלטה</div>
+    <div class="buttons">
+      <button id="recOriginalBtn" class="rec"><span class="dot"></span><span class="label">הקלטה</span></button>
+      <button id="playOriginalBtn" class="teal" disabled>▶ שמע רגיל</button>
+      <button id="playOriginalRevBtn" class="amber" disabled>◀ שמע הפוך (המטרה)</button>
+      <button id="toPlayersBtn" class="primary" disabled>המשך למשתתפים</button>
+    </div>
+  </div>
+
+  <div id="screen-players" class="screen">
+    <h2>שלב 2 · משתתפים</h2>
+    <p class="hint">כל משתתף ינסה בתורו לבטא את הרוורס</p>
+    <div class="addPlayerRow">
+      <input id="playerNameInput" placeholder="שם המשתתף" maxlength="20">
+      <button id="addPlayerBtn">הוסף</button>
+    </div>
+    <ul id="playersList" class="playersList"></ul>
+    <div class="buttons">
+      <button id="startRoundBtn" class="primary" disabled>התחל את הסיבוב</button>
+    </div>
+  </div>
+
+  <div id="screen-turn" class="screen">
+    <h2 id="turnTitle">תור של: —</h2>
+    <p class="hint">נסו לבטא בקול את מה ששמעתם ברוורס</p>
+    <button id="replayTargetBtn" class="amber small">◀ שמע שוב את הרוורס</button>
+    <canvas id="waveTurn"></canvas>
+    <div class="status" id="statusTurn">מוכן להקלטה</div>
+    <div class="buttons">
+      <button id="recAttemptBtn" class="rec"><span class="dot"></span><span class="label">הקלט ניסיון</span></button>
+      <button id="playAttemptBtn" class="teal" disabled>▶ שמע את הניסיון</button>
+      <button id="playAttemptRevBtn" class="amber" disabled>◀ שמע את הניסיון הפוך</button>
+      <button id="confirmScoreBtn" class="primary" disabled>אשר וחשב ציון</button>
+    </div>
+    <div id="scoreResult" class="scoreResult">
+      <div class="scoreBig" id="scoreBig">--</div>
+      <div class="scoreBreakdown" id="scoreBreakdown"></div>
+      <div class="buttons">
+        <button id="nextPlayerBtn" class="primary">לשחקן הבא</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="screen-leaderboard" class="screen">
+    <h2>🏆 תוצאות</h2>
+    <ol id="leaderboardList" class="leaderboard"></ol>
+    <p class="disclaimer">* הציון מבוסס על השוואת קצב, גוון קול ואורך ההקלטה בין הניסיון ההפוך למקור — לא זיהוי דיבור אמיתי</p>
+    <div class="buttons">
+      <button id="sameWordBtn" class="teal">אותה מילה, משתתפים חדשים</button>
+      <button id="newWordBtn" class="amber">מילה חדשה, אותם משתתפים</button>
+      <button id="restartBtn" class="primary">התחלה מחדש</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+let audioCtx = null;
+function ac(){ if(!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)(); return audioCtx; }
+let currentSource = null;
+
+let state = { original:null, originalRev:null, players:[], turnIndex:0 };
+
+function showScreen(id){
+  document.querySelectorAll('.screen').forEach(el=>el.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+function escapeHtml(s){
+  return s.replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+/* ---------- recording ---------- */
+function createRecorder(){
+  return {
+    async start(){
+      this.stream = await navigator.mediaDevices.getUserMedia({audio:true});
+      this.chunks = [];
+      this.mr = new MediaRecorder(this.stream);
+      this.mr.ondataavailable = e => { if(e.data.size>0) this.chunks.push(e.data); };
+      this._stopped = new Promise(res => { this.mr.onstop = res; });
+      this.mr.start();
+    },
+    async stop(){
+      this.mr.stop();
+      await this._stopped;
+      this.stream.getTracks().forEach(t=>t.stop());
+      const blob = new Blob(this.chunks, {type: this.mr.mimeType || 'audio/webm'});
+      const arrBuf = await blob.arrayBuffer();
+      return await ac().decodeAudioData(arrBuf);
+    }
+  };
+}
+
+function wireRecordButton(btnId, statusId, canvasId, onDone){
+  const btn = document.getElementById(btnId);
+  const statusEl = document.getElementById(statusId);
+  const label = btn.querySelector('.label');
+  const idleText = label.textContent;
+  let recorder = null, recording = false;
+
+  btn.addEventListener('click', async () => {
+    if(recording){
+      btn.disabled = true;
+      statusEl.textContent = 'מעבד...';
+      try{
+        const buffer = await recorder.stop();
+        recording = false;
+        btn.classList.remove('recording');
+        label.textContent = idleText;
+        btn.disabled = false;
+        statusEl.textContent = 'מוכן';
+        statusEl.classList.remove('rec');
+        drawWave(document.getElementById(canvasId), buffer);
+        onDone(buffer);
+      }catch(e){
+        statusEl.textContent = 'שגיאה בעיבוד ההקלטה, נסו שוב';
+        btn.disabled = false;
+      }
+    } else {
+      recorder = createRecorder();
+      try{ await recorder.start(); }
+      catch(e){ statusEl.textContent = 'אין הרשאה למיקרופון'; return; }
+      recording = true;
+      btn.classList.add('recording');
+      label.textContent = 'עצור';
+      statusEl.textContent = 'מקליט...';
+      statusEl.classList.add('rec');
+    }
+  });
+}
+
+function reverseBuffer(buffer){
+  const newBuffer = ac().createBuffer(buffer.numberOfChannels, buffer.length, buffer.sampleRate);
+  for(let ch=0; ch<buffer.numberOfChannels; ch++){
+    const src = buffer.getChannelData(ch);
+    const dst = newBuffer.getChannelData(ch);
+    for(let i=0;i<src.length;i++) dst[i] = src[src.length-1-i];
+  }
+  return newBuffer;
+}
+
+function playBuffer(buffer){
+  if(!buffer) return;
+  if(currentSource){ try{ currentSource.stop(); }catch(e){} }
+  const src = ac().createBufferSource();
+  src.buffer = buffer;
+  src.connect(ac().destination);
+  currentSource = src;
+  src.start();
+}
+
+function drawWave(canvas, buffer){
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width = canvas.clientWidth;
+  const h = canvas.height = 100;
+  ctx.clearRect(0,0,w,h);
+  if(!buffer) return;
+  const data = buffer.getChannelData(0);
+  const step = Math.ceil(data.length / w) || 1;
+  const mid = h/2;
+  ctx.strokeStyle = '#5ec8b8';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  for(let i=0;i<w;i++){
+    let min=1, max=-1;
+    for(let j=0;j<step;j++){
+      const v = data[i*step+j] || 0;
+      if(v<min) min=v;
+      if(v>max) max=v;
+    }
+    ctx.moveTo(i, mid + min*mid);
+    ctx.lineTo(i, mid + max*mid);
+  }
+  ctx.stroke();
+}
+
+/* ---------- scoring ---------- */
+function toMono(buffer){
+  const len = buffer.length;
+  const out = new Float32Array(len);
+  for(let ch=0; ch<buffer.numberOfChannels; ch++){
+    const d = buffer.getChannelData(ch);
+    for(let i=0;i<len;i++) out[i] += d[i]/buffer.numberOfChannels;
+  }
+  return out;
+}
+
+function computeEnvelope(mono, numPoints=50){
+  const len = mono.length;
+  const chunk = Math.max(1, Math.floor(len/numPoints));
+  const env = [];
+  for(let i=0;i<numPoints;i++){
+    const start = i*chunk, end = Math.min(len, start+chunk);
+    let sum = 0;
+    for(let j=start;j<end;j++) sum += mono[j]*mono[j];
+    env.push(end>start ? Math.sqrt(sum/(end-start)) : 0);
+  }
+  const max = Math.max(...env, 1e-9);
+  return env.map(v=>v/max);
+}
+
+function pearson(a,b){
+  const n = a.length;
+  const meanA = a.reduce((s,v)=>s+v,0)/n;
+  const meanB = b.reduce((s,v)=>s+v,0)/n;
+  let num=0, da=0, db=0;
+  for(let i=0;i<n;i++){
+    const x=a[i]-meanA, y=b[i]-meanB;
+    num += x*y; da += x*x; db += y*y;
+  }
+  const denom = Math.sqrt(da*db);
+  return denom===0 ? 0 : num/denom;
+}
+
+function bestEnvelopeCorrelation(envA, envB, maxShift=8){
+  let best = -1;
+  for(let shift=-maxShift; shift<=maxShift; shift++){
+    const a=[], b=[];
+    for(let i=0;i<envA.length;i++){
+      const j = i+shift;
+      if(j>=0 && j<envB.length){ a.push(envA[i]); b.push(envB[j]); }
+    }
+    if(a.length < 10) continue;
+    const c = pearson(a,b);
+    if(c>best) best=c;
+  }
+  return best;
+}
+
+function fft(re, im){
+  const n = re.length;
+  for(let i=1,j=0;i<n;i++){
+    let bit = n>>1;
+    for(; j & bit; bit>>=1) j ^= bit;
+    j ^= bit;
+    if(i<j){ [re[i],re[j]]=[re[j],re[i]]; [im[i],im[j]]=[im[j],im[i]]; }
+  }
+  for(let len=2; len<=n; len<<=1){
+    const ang = -2*Math.PI/len;
+    const wr = Math.cos(ang), wi = Math.sin(ang);
+    for(let i=0;i<n;i+=len){
+      let curWr=1, curWi=0;
+      for(let k=0;k<len/2;k++){
+        const ur=re[i+k], ui=im[i+k];
+        const vr=re[i+k+len/2]*curWr - im[i+k+len/2]*curWi;
+        const vi=re[i+k+len/2]*curWi + im[i+k+len/2]*curWr;
+        re[i+k]=ur+vr; im[i+k]=ui+vi;
+        re[i+k+len/2]=ur-vr; im[i+k+len/2]=ui-vi;
+        const nwr = curWr*wr - curWi*wi;
+        const nwi = curWr*wi + curWi*wr;
+        curWr=nwr; curWi=nwi;
+      }
+    }
+  }
+}
+
+function computeSpectralProfile(mono, fftSize=1024, numBins=24){
+  const len = mono.length;
+  const numWindows = Math.max(1, Math.floor(len/fftSize));
+  const bins = new Float64Array(fftSize/2);
+  const hann = new Float64Array(fftSize);
+  for(let i=0;i<fftSize;i++) hann[i] = 0.5 - 0.5*Math.cos(2*Math.PI*i/(fftSize-1));
+
+  for(let w=0; w<numWindows; w++){
+    const re = new Float64Array(fftSize);
+    const im = new Float64Array(fftSize);
+    const offset = w*fftSize;
+    for(let i=0;i<fftSize;i++) re[i] = (mono[offset+i]||0) * hann[i];
+    fft(re, im);
+    for(let k=0;k<fftSize/2;k++) bins[k] += Math.sqrt(re[k]*re[k]+im[k]*im[k]);
+  }
+  for(let k=0;k<bins.length;k++) bins[k] /= numWindows;
+
+  const grouped = new Float64Array(numBins);
+  const groupSize = Math.ceil(bins.length/numBins);
+  for(let b=0;b<numBins;b++){
+    let sum=0, cnt=0;
+    for(let k=b*groupSize; k<Math.min(bins.length,(b+1)*groupSize); k++){ sum+=bins[k]; cnt++; }
+    grouped[b] = cnt>0 ? Math.log(1+sum/cnt) : 0;
+  }
+  const norm = Math.sqrt(grouped.reduce((s,v)=>s+v*v,0)) || 1e-9;
+  return Array.from(grouped, v=>v/norm);
+}
+
+function cosineSim(a,b){
+  let dot=0;
+  for(let i=0;i<a.length;i++) dot += a[i]*b[i];
+  return dot;
+}
+
+function durationScore(bufA, bufB){
+  const a=bufA.duration, b=bufB.duration;
+  const diff = Math.abs(a-b)/Math.max(a,b,0.001);
+  return Math.max(0, 100*(1-diff));
+}
+
+function scoreAttempt(originalBuffer, attemptReversedBuffer){
+  const monoOrig = toMono(originalBuffer);
+  const monoAtt = toMono(attemptReversedBuffer);
+
+  const envA = computeEnvelope(monoOrig, 50);
+  const envB = computeEnvelope(monoAtt, 50);
+  const envCorr = bestEnvelopeCorrelation(envA, envB);
+  const envScore = Math.max(0, (envCorr+1)/2*100);
+
+  const specA = computeSpectralProfile(monoOrig);
+  const specB = computeSpectralProfile(monoAtt);
+  const specScore = Math.max(0, Math.min(100, cosineSim(specA, specB)*100));
+
+  const durScore = durationScore(originalBuffer, attemptReversedBuffer);
+
+  const final = 0.45*envScore + 0.35*specScore + 0.20*durScore;
+  return {
+    final: Math.round(Math.max(0, Math.min(100, final))),
+    breakdown: {
+      envelope: Math.round(envScore),
+      spectral: Math.round(specScore),
+      duration: Math.round(durScore)
+    }
+  };
+}
+
+/* ---------- screen: start ---------- */
+document.getElementById('btnNewGame').addEventListener('click', () => showScreen('screen-original'));
+
+/* ---------- screen: original ---------- */
+wireRecordButton('recOriginalBtn','statusOriginal','waveOriginal', (buffer) => {
+  state.original = buffer;
+  state.originalRev = reverseBuffer(buffer);
+  document.getElementById('playOriginalBtn').disabled = false;
+  document.getElementById('playOriginalRevBtn').disabled = false;
+  document.getElementById('toPlayersBtn').disabled = false;
+});
+document.getElementById('playOriginalBtn').addEventListener('click', () => playBuffer(state.original));
+document.getElementById('playOriginalRevBtn').addEventListener('click', () => playBuffer(state.originalRev));
+document.getElementById('toPlayersBtn').addEventListener('click', () => showScreen('screen-players'));
+
+/* ---------- screen: players ---------- */
+function renderPlayersList(){
+  const ul = document.getElementById('playersList');
+  ul.innerHTML = '';
+  state.players.forEach((p, idx) => {
+    const li = document.createElement('li');
+    li.innerHTML = `<span>${escapeHtml(p.name)}</span><button data-idx="${idx}" class="removeBtn">✕</button>`;
+    ul.appendChild(li);
+  });
+  document.getElementById('startRoundBtn').disabled = state.players.length === 0;
+}
+
+function addPlayer(){
+  const input = document.getElementById('playerNameInput');
+  const name = input.value.trim();
+  if(!name) return;
+  state.players.push({name, attempt:null, attemptRev:null, score:null, breakdown:null});
+  input.value = '';
+  renderPlayersList();
+}
+
+document.getElementById('addPlayerBtn').addEventListener('click', addPlayer);
+document.getElementById('playerNameInput').addEventListener('keydown', e => { if(e.key==='Enter'){ e.preventDefault(); addPlayer(); } });
+document.getElementById('playersList').addEventListener('click', e => {
+  if(e.target.classList.contains('removeBtn')){
+    state.players.splice(parseInt(e.target.dataset.idx), 1);
+    renderPlayersList();
+  }
+});
+document.getElementById('startRoundBtn').addEventListener('click', () => {
+  state.turnIndex = 0;
+  startTurn();
+});
+
+/* ---------- screen: turn ---------- */
+function startTurn(){
+  const player = state.players[state.turnIndex];
+  document.getElementById('turnTitle').textContent = `תור של: ${player.name}`;
+  document.getElementById('scoreResult').classList.remove('show');
+  document.getElementById('playAttemptBtn').disabled = true;
+  document.getElementById('playAttemptRevBtn').disabled = true;
+  document.getElementById('confirmScoreBtn').disabled = true;
+  document.getElementById('statusTurn').textContent = 'מוכן להקלטה';
+  document.getElementById('statusTurn').classList.remove('rec');
+  drawWave(document.getElementById('waveTurn'), null);
+  showScreen('screen-turn');
+}
+
+document.getElementById('replayTargetBtn').addEventListener('click', () => playBuffer(state.originalRev));
+
+wireRecordButton('recAttemptBtn','statusTurn','waveTurn', (buffer) => {
+  const player = state.players[state.turnIndex];
+  player.attempt = buffer;
+  player.attemptRev = reverseBuffer(buffer);
+  document.getElementById('playAttemptBtn').disabled = false;
+  document.getElementById('playAttemptRevBtn').disabled = false;
+  document.getElementById('confirmScoreBtn').disabled = false;
+});
+
+document.getElementById('playAttemptBtn').addEventListener('click', () => playBuffer(state.players[state.turnIndex].attempt));
+document.getElementById('playAttemptRevBtn').addEventListener('click', () => playBuffer(state.players[state.turnIndex].attemptRev));
+
+document.getElementById('confirmScoreBtn').addEventListener('click', () => {
+  const player = state.players[state.turnIndex];
+  const result = scoreAttempt(state.original, player.attemptRev);
+  player.score = result.final;
+  player.breakdown = result.breakdown;
+  document.getElementById('scoreBig').textContent = result.final;
+  document.getElementById('scoreBreakdown').innerHTML =
+    `<div>קצב ואנרגיה: ${result.breakdown.envelope}</div>` +
+    `<div>גוון קול: ${result.breakdown.spectral}</div>` +
+    `<div>אורך: ${result.breakdown.duration}</div>`;
+  document.getElementById('scoreResult').classList.add('show');
+  document.getElementById('confirmScoreBtn').disabled = true;
+});
+
+document.getElementById('nextPlayerBtn').addEventListener('click', () => {
+  state.turnIndex++;
+  if(state.turnIndex < state.players.length) startTurn();
+  else showLeaderboard();
+});
+
+/* ---------- screen: leaderboard ---------- */
+function showLeaderboard(){
+  const sorted = [...state.players].sort((a,b) => b.score - a.score);
+  document.getElementById('leaderboardList').innerHTML = sorted.map((p,i) => `
+    <li class="${i===0?'winner':''}">
+      <span class="rank">${i===0?'👑':'#'+(i+1)}</span>
+      <span class="name">${escapeHtml(p.name)}</span>
+      <span class="score">${p.score}</span>
+    </li>
+  `).join('');
+  showScreen('screen-leaderboard');
+}
+
+document.getElementById('sameWordBtn').addEventListener('click', () => {
+  state.players = [];
+  state.turnIndex = 0;
+  renderPlayersList();
+  showScreen('screen-players');
+});
+
+document.getElementById('newWordBtn').addEventListener('click', () => {
+  state.players.forEach(p => { p.attempt=null; p.attemptRev=null; p.score=null; p.breakdown=null; });
+  state.original = null; state.originalRev = null; state.turnIndex = 0;
+  document.getElementById('playOriginalBtn').disabled = true;
+  document.getElementById('playOriginalRevBtn').disabled = true;
+  document.getElementById('toPlayersBtn').disabled = true;
+  document.getElementById('statusOriginal').textContent = 'מוכן להקלטה';
+  drawWave(document.getElementById('waveOriginal'), null);
+  showScreen('screen-original');
+});
+
+document.getElementById('restartBtn').addEventListener('click', () => {
+  state = { original:null, originalRev:null, players:[], turnIndex:0 };
+  renderPlayersList();
+  document.getElementById('playOriginalBtn').disabled = true;
+  document.getElementById('playOriginalRevBtn').disabled = true;
+  document.getElementById('toPlayersBtn').disabled = true;
+  document.getElementById('statusOriginal').textContent = 'מוכן להקלטה';
+  drawWave(document.getElementById('waveOriginal'), null);
+  showScreen('screen-start');
+});
+</script>
+</body>
+</html>
